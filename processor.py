@@ -8,16 +8,20 @@ from datetime import datetime as dt
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-DATABASE_URL = os.getenv('DATABASE_URL')
-TABLE_NAME = 'news'
-WAIT_TIME = 30  # minutes
+# Source database (aware-adaptation) - where news is scraped
+SOURCE_DATABASE_URL = os.getenv('DATABASE_URL')
+# Target database (awake-victory) - where processed news goes
+TARGET_DATABASE_URL = os.getenv('TARGET_DATABASE_URL')
 
-def init_db(conn):
-    """Ensure app_post table exists."""
+SOURCE_TABLE = 'news'
+TARGET_TABLE = 'app_post'
+
+def init_target_db(conn):
+    """Ensure app_post table exists in target database."""
     try:
         cur = conn.cursor()
-        cur.execute("""
-        CREATE TABLE IF NOT EXISTS app_post (
+        cur.execute(f"""
+        CREATE TABLE IF NOT EXISTS {TARGET_TABLE} (
         id SERIAL PRIMARY KEY,
         title VARCHAR(500),
         url VARCHAR(500),
@@ -33,67 +37,85 @@ def init_db(conn):
         """)
         conn.commit()
         cur.close()
-        logger.info("app_post table initialized")
+        logger.info("app_post table initialized in target database")
     except Exception as e:
         logger.error(f"Table initialization error: {e}")
         conn.rollback()
 
 def check_db_update_and_post():
-    """Check news table for unprocessed items and insert into app_post."""
+    """Check news table (source DB) for unprocessed items and insert into app_post (target DB)."""
     try:
-        conn = psycopg2.connect(DATABASE_URL)
+        # Connect to source database (aware-adaptation)
+        source_conn = psycopg2.connect(SOURCE_DATABASE_URL)
+        source_cur = source_conn.cursor()
         
-        # Initialize tables
-        init_db(conn)
+        # Connect to target database (awake-victory)
+        target_conn = psycopg2.connect(TARGET_DATABASE_URL)
         
-        cur = conn.cursor()
+        # Initialize tables in target database
+        init_target_db(target_conn)
         
-        # Get unprocessed news
-        cur.execute(f"SELECT id, title, link FROM {TABLE_NAME} WHERE teamsd = 0 ORDER BY created_at DESC LIMIT 100")
-        news = cur.fetchall()
+        target_cur = target_conn.cursor()
+        
+        # Get unprocessed news from source database
+        logger.info("Querying unprocessed news from source database...")
+        source_cur.execute(f"SELECT id, title, link FROM {SOURCE_TABLE} WHERE teamsd = 0 ORDER BY created_at DESC LIMIT 100")
+        news = source_cur.fetchall()
         
         if not news:
             logger.info("No new news to process")
-            cur.close()
-            conn.close()
+            source_cur.close()
+            source_conn.close()
+            target_cur.close()
+            target_conn.close()
             return
         
+        logger.info(f"Found {len(news)} unprocessed articles")
         updated_rows = []
         
         for row_id, title, link in news:
             try:
                 site = urlparse(link).netloc
                 
-                # Insert into app_post
-                cur.execute("""
-                INSERT INTO app_post (title, url, votes, site, user_id)
+                # Insert into app_post in target database
+                target_cur.execute(f"""
+                INSERT INTO {TARGET_TABLE} (title, url, votes, site, user_id)
                 VALUES (%s, %s, 1, %s, 2)
                 """, (title[:140], link[:500], site))
                 
-                logger.info(f"Inserted: {title[:80]}")
+                logger.info(f"Inserted to awake-victory: {title[:80]}")
                 updated_rows.append(row_id)
                 
             except Exception as e:
                 logger.error(f"Error processing row {row_id}: {e}")
                 continue
         
-        # Mark as processed
-        if updated_rows:
-            cur.execute(f"UPDATE {TABLE_NAME} SET teamsd = 1 WHERE id = ANY(%s)", (updated_rows,))
-            conn.commit()
-            logger.info(f"Sent {len(updated_rows)} updates to app_post. Sleeping for {WAIT_TIME} minutes...")
+        # Commit to target database
+        target_conn.commit()
         
-        cur.close()
-        conn.close()
+        # Mark as processed in source database
+        if updated_rows:
+            source_cur.execute(f"UPDATE {SOURCE_TABLE} SET teamsd = 1 WHERE id = ANY(%s)", (updated_rows,))
+            source_conn.commit()
+            logger.info(f"Marked {len(updated_rows)} articles as processed in source database")
+        
+        source_cur.close()
+        source_conn.close()
+        target_cur.close()
+        target_conn.close()
         
     except Exception as e:
         logger.error(f"Database error: {e}")
-        if 'conn' in locals():
-            conn.close()
+        if 'source_conn' in locals():
+            source_conn.close()
+        if 'target_conn' in locals():
+            target_conn.close()
 
 def main():
     """Main entry point."""
     logger.info("Starting news processor worker")
+    logger.info(f"Source DB: {SOURCE_DATABASE_URL[:50] if SOURCE_DATABASE_URL else 'NOT SET'}...")
+    logger.info(f"Target DB: {TARGET_DATABASE_URL[:50] if TARGET_DATABASE_URL else 'NOT SET'}...")
     check_db_update_and_post()
 
 if __name__ == '__main__':
