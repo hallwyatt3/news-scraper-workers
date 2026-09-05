@@ -79,8 +79,8 @@ def check_db_update_and_post():
                 
                 # Insert into app_post in target database with explicit columns and defaults
                 target_cur.execute(f"""
-                INSERT INTO {TARGET_TABLE} (title, url, votes, site, user_id, insert_date, show_dt, ask_dt)
-                VALUES (%s, %s, 1, %s, 2, CURRENT_TIMESTAMP, false, false, false, 2)
+                INSERT INTO {TARGET_TABLE} (insert_date, title, votes, url, site, show_dt, ask_dt, tweeted, user_id)
+                VALUES (CURRENT_TIMESTAMP, %s, 1, %s, %s, false, false, false, 2)
                 """, (title[:140], link[:500], site))
                 
                 logger.info(f"Inserted to awake-victory: {title[:80]}")
