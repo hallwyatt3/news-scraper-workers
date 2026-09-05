@@ -39,7 +39,7 @@ def init_target_db(conn):
         cur.close()
         logger.info("app_post table initialized in target database")
     except Exception as e:
-        logger.error(f"Table initialization error: {e}")
+        logger.error(f"Target table initialization error: {e}")
         conn.rollback()
 
 def check_db_update_and_post():
@@ -77,10 +77,10 @@ def check_db_update_and_post():
             try:
                 site = urlparse(link).netloc
                 
-                # Insert into app_post in target database
+                # Insert into app_post in target database with explicit insert_date
                 target_cur.execute(f"""
-                INSERT INTO {TARGET_TABLE} (title, url, votes, site, user_id)
-                VALUES (%s, %s, 1, %s, 2)
+                INSERT INTO {TARGET_TABLE} (title, url, votes, site, user_id, insert_date)
+                VALUES (%s, %s, 1, %s, 2, CURRENT_TIMESTAMP)
                 """, (title[:140], link[:500], site))
                 
                 logger.info(f"Inserted to awake-victory: {title[:80]}")
@@ -88,6 +88,8 @@ def check_db_update_and_post():
                 
             except Exception as e:
                 logger.error(f"Error processing row {row_id}: {e}")
+                # Rollback the failed transaction and continue with next row
+                target_conn.rollback()
                 continue
         
         # Commit to target database
