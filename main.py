@@ -16,9 +16,28 @@ TABLE_NAME = 'news'
 
 urls = {
     'reuters': 'https://news.google.com/rss/search?q=when:24h+allinurl:reuters.com/business/energy&ceid=US:en&hl=en-US&gl=US',
-    'hart': 'https://www.hartenergy.com/pf/api/v3/content/fetch/story-feed-sections?query=%7B%22excludeSections%22%3A%22%2Fother-media%2C%20%2Fvideo%22%2C%22feature%22%3A%22section-results-list%22%2C%22feedOffset%22%3A0%2C%22feedSize%22%3A11%2C%22includeSections%22%3A%22%2Fupstream%22%7D',
+    'hart': 'https://www.hartenergy.com/pf/api/v3/content/fetch/story-feed-sections',
     'mdn': 'https://news.google.com/rss/search?q=when:24h+allinurl:marcellusdrilling.com&ceid=US:en&hl=en-US&gl=US',
     'jefferies': 'https://www.tickertech.com/jefferies/news-listings.html/?newslist=XOM,CVX,SHEL,TTE,BP,EQNR,REPYY,COP,OXY,EOG,FANG,DVN,OVV,PR,APA,MTDR,CIVI,CHRD,CRGY,SM,CRC,NOG,MGY,MUR,EQT,EXE,CTRA,AR,RRC,CNX,DEC,GPOR,INR,TPL,VNOM,BSM,KRP,DMLP,VTS,TBN,BKV,TALO,MNR,SOC,KOS,DEC,REPX,HPK,GRNT,TXO,SD,WTI,REI,FTW,AMPY,PED,EPM,PROP,EP,BATL'
+}
+
+headers = {
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+    "Accept-Encoding": "gzip, deflate, br, zstd",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Cache-Control": "no-cache",
+    "Cookie": "AKA_A2=A",
+    "Pragma": "no-cache",
+    "Priority": "u=0, i",
+    "Sec-CH-UA": '"Chromium";v="152", "Not?A_Brand";v="24", "Google Chrome";v="152"',
+    "Sec-CH-UA-Mobile": "?0",
+    "Sec-CH-UA-Platform": '"Windows"',
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
+    "Sec-Fetch-User": "?1",
+    "Upgrade-Insecure-Requests": "1",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
 }
 
 date_format = '%Y-%m-%d'
@@ -88,7 +107,13 @@ def check_reuters(url):
 
 def check_hart(url):
     try:
-        response = requests.get(url, timeout=15)
+        response = requests.get(
+            url,
+            headers=headers,
+            params={
+                "query": '{"excludeSections":"/other-media, /video","feature":"section-results-list","feedOffset":0,"feedSize":11,"includeSections":"/upstream"}'
+            },
+        )
         response.raise_for_status()
         hart_data = response.json()
         
